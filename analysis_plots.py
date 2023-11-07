@@ -137,6 +137,7 @@ def plot_correlations(df_ingreds_np, plotpath, heatmap_path, string_columns):
                 )
             plt.close("all")
 
+
 def boxplot(df, plotpath, string_columns):
     """"
     creates a boxplot each column
@@ -184,7 +185,6 @@ def boxplot(df, plotpath, string_columns):
         outname = "boxplot of " + str(prop) + ".png"
         plt.savefig(os.path.join(boxplotpath, outname))
         plt.close("all")
-
 
 
 def counts(df, countsplotpath):
