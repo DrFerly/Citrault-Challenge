@@ -5,6 +5,7 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 
 def scatter(x, y, xlabel=None, ylabel=None, outfile=None, close=True):
@@ -23,6 +24,15 @@ def scatter(x, y, xlabel=None, ylabel=None, outfile=None, close=True):
         plt.savefig(outfile)
     if close:
         plt.close("all")
+
+
+def confusion_matrix_plot(y_test, y_pred, outpath, feat_sel):
+    cm = confusion_matrix(y_test, y_pred)
+    ConfusionMatrixDisplay(confusion_matrix=cm).plot()
+    cmpath = os.path.join(outpath, "confusion_matrix")
+    outname = feat_sel + "cm.png"
+    plt.savefig(os.path.join(cmpath, outname))
+    plt.close("all")
 
 
 def heatmap(data_joined, correlations, heatmap_path, plt_nb):
