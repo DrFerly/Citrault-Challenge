@@ -5,13 +5,65 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from GLOBAL_VAR import CREATE_PLOTS
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+
+
+def analysis_plots(df, plotpath, string_columns):
+    """
+    create plots for data analysis
+    """
+    if CREATE_PLOTS:
+        print("create boxplots")
+        boxplot(df, plotpath, string_columns)
+        print("create count plots")
+        counts(df, plotpath)
+        print("create correlation plots")
+        plot_correlations(df, plotpath, plotpath, string_columns)
+        targets = ["ClaimNb", "ClaimAmount"]
+        scatterplotpath = os.path.join(plotpath, "scatter")
+        for tar in targets:
+            df_tar = df
+            df_tar = df_tar.drop(columns=["IDpol"])
+            for tcol in df_tar.columns:
+                if tcol != tar:
+                    scatter_filename = tar + "_and_" + tcol + '.png'
+                    outfile = os.path.join(scatterplotpath, scatter_filename)
+                    scatter(
+                        df[tcol],
+                        df[tar],
+                        xlabel=tcol,
+                        ylabel=tar,
+                        outfile=outfile,
+                        close=True
+                    )
+
+
+def actual_pred_scatter(y_test, y_pred, target, outfile):
+    fig = plt.figure(figsize=(25, 25))
+    ax1 = fig.add_subplot(111)
+    ax1.scatter(y_test[target], y_pred[target], s=10, c='b', marker="o", label='RFRegressor')
+    # ax1.scatter(x_id, y_pred[target], s=10, c='r', marker="o", label='Predicted')
+    plt.legend(loc="upper right", fontsize=40)
+    ax1.set_ylabel("predicted", fontsize=40)
+    ax1.set_xlabel("actual", fontsize=40)
+    ax1.tick_params(axis='both', which='major', labelsize=40)
+    ax1.tick_params(axis='both', which='minor', labelsize=40)
+    ax1.axline((0, 0), slope=0.5, c='black')
+    ax1.set_xlim(0, 5000)
+    ax1.set_ylim(0, 5000)
+    # ax1.margins(50)
+    if outfile:
+        plt.savefig(outfile)
+    plt.close("all")
+
 
 
 def scatter(x, y, xlabel=None, ylabel=None, outfile=None, close=True):
     """
     function to create a scatterplot using the scatter function
     """
+    plt.figure(figsize=(20, 20))
     plt.plot(x, y, marker="o", linewidth = 0, markersize=10)
     ax = plt.gca()
     ax.tick_params(axis='both', which='major', labelsize=40)
@@ -107,12 +159,6 @@ def plot_correlations(df_ingreds_np, plotpath, heatmap_path, string_columns):
     correlations = df_corr.corr()
     correlations = correlations.dropna(axis=1, how='all')
     correlations = correlations.dropna(axis=0, how='all')
-
-    # # PLA specific code (following 4 lines of code)
-    # ingredient_correlations = correlations.loc[:'Epon 164', :'Epon 164']
-    # property_correlations = correlations.loc['RPM':, 'RPM':]
-    # ing_prop_correlations = correlations.loc['RPM':, :'Epon 164']
-    # # import ipdb; ipdb.set_trace()
     plt_nb = 0
     # for correl in [ingredient_correlations, property_correlations, ing_prop_correlations]:
     #     plt_nb += 1
@@ -120,6 +166,7 @@ def plot_correlations(df_ingreds_np, plotpath, heatmap_path, string_columns):
     #     heatmap(correl, correl, heatmap_path, plt_nb)
     #     # create the scatter plots:
     heatmap(correlations, correlations, heatmap_path, plt_nb)
+    plt.close("all")
     columns = correlations.columns
     for k in range(0, len(correlations)):
         for l in range(k+1, len(correlations)):
@@ -136,7 +183,7 @@ def plot_correlations(df_ingreds_np, plotpath, heatmap_path, string_columns):
             outname = r"correlation_%s_%s.png" % (col_n1, col_n2)
             corr_plotpath = os.path.join(plotpath, "correlation")
             outfile = os.path.join(corr_plotpath, outname)
-            if (correlations[col_n1][col_n2] > 0.75) | (correlations[col_n1][col_n2] < -0.75):
+            if (correlations[col_n1][col_n2] > 0.3) | (correlations[col_n1][col_n2] < -0.3):
                 scatter(
                     df_corr[col_n1],
                     df_corr[col_n2],
@@ -169,7 +216,7 @@ def boxplot(df, plotpath, string_columns):
     df = df.drop(columns=string_columns)
     boxplotpath = os.path.join(plotpath, "boxplot")
     # for each columns do the counts:
-    for prop in list(df.columns):
+    for prop in list(df.columns.drop("IDpol")):
         # summe is the sum of the counts of each column ingredient
         # summe = df[prop].count()
         # elem is the column elements
@@ -193,6 +240,8 @@ def boxplot(df, plotpath, string_columns):
         # plt.xticks(rotation='vertical')
         # save plot
         outname = "boxplot of " + str(prop) + ".png"
+        ax.tick_params(axis='both', which='major', labelsize=40)
+        ax.tick_params(axis='both', which='minor', labelsize=40)
         plt.savefig(os.path.join(boxplotpath, outname))
         plt.close("all")
 
@@ -214,19 +263,28 @@ def counts(df, countsplotpath):
             col_cleaned = col.replace(spec_char, '')
             counts_renaming.update({col : col_cleaned})
     df = df.rename(columns=counts_renaming)
-    df.replace(0, np.nan, inplace=True)
+    # df.replace(0, np.nan, inplace=True)
     countsplotpath = os.path.join(countsplotpath, "histogram")
     # for each columns do the counts:
-    for prop in list(df.columns):
+    for prop in list(df.columns.drop("IDpol")):
         # summe is the sum of the counts of each column ingredient
         summe = df[prop].count()
+        if prop == "ClaimAmount":
+            print('debug')
         # elem is the column elements
         elem = list(df[prop][np.invert(pd.isnull(df[prop]))].to_numpy())
         # create the plot
         plt.figure(figsize=(20, 20))
         plt.title("sum for " + str(prop) + " : " + str(summe), fontsize=40)
         # create the histogram
-        plt.hist(elem, bins=10, histtype="stepfilled", color="gray")
+        if len(df[prop].unique()) <=25:
+            if pd.isna(df[prop].unique()).any():
+                nb_bins = len(df[prop].unique()) -1
+            else:
+                nb_bins = len(df[prop].unique())
+        else:
+            nb_bins= 10
+        plt.hist(elem, bins=nb_bins, histtype="bar", align='mid', color="blue", density=True)
         ax = plt.gca()
         ax.tick_params(axis='both', which='major', labelsize=40)
         ax.tick_params(axis='both', which='minor', labelsize=40)
