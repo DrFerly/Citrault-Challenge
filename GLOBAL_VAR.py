@@ -1,2 +1,3 @@
-CREATE_PLOTS = False
-SHAP = False
+CREATE_ANALYSIS_PLOTS = False
+MODEL_PLOTS = False
+SHAP = True
