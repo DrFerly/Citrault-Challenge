@@ -6,14 +6,20 @@ import time
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.svm import SVC
+from sklearn.linear_model import TweedieRegressor, PoissonRegressor, GammaRegressor
 import winsound
 from tqdm import tqdm
 import shap
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
-from analysis_plots import analysis_plots, actual_pred_scatter, shap_plots, feature_importances_plot, confusion_matrix_and_class_report, calculate_model_metrics
+from analysis_plots import analysis_plots, \
+    actual_pred_scatter, shap_plots, feature_importances_plot, confusion_matrix_and_class_report, calculate_model_metrics, \
+        actual_pred_scatter_for_feature, plot_train_actual_vs_predicted_features
 from GLOBAL_VAR import SHAP, MODEL_PLOTS
 from sklearn.preprocessing import StandardScaler
 from data_preprocessing import encode_string_columns, join_and_clean_data
+from glm_helper_functions import score_estimator, plot_obs_pred
+import matplotlib.pyplot as plt
+import numpy as np
 
 
 
@@ -37,12 +43,13 @@ def main():
     # create plots for data analysis
     analysis_plots(df, plotpath, string_columns)
     # drop features that should not be considered in model
-    df = df.drop(columns=["IDpol", "Area", "Exposure"])
+    # df = df.drop(columns=["IDpol", "Area", "Exposure"])
+    df = df.drop(columns=["Area"])
     # set start if progress bar
     pbar = tqdm(total=100)
     # try out different features and loop over selection for model training+ pred:
     selected_features_to_drop = [
-        ["BonusMalus"],
+        ["IDpol"],
         # ["IDpol", "VehGas", "Density", "DrivAge"],
         # ["IDpol", "Area", "Region"],
         # ["IDpol", "VehBrand", "Area", "Region"]
@@ -65,52 +72,157 @@ def main():
             for col in df.columns:
                 print(str(df[col].isna().sum()) + " NaN's in col " + str(col))
         # define targets and algorithms to try
-        all_targets = ['ClaimNb', 'ClaimAmount']
-        all_algos = [RandomForestClassifier(), RandomForestRegressor()]
+        all_targets = ['ClaimNb', 'ClaimAmount', 'Frequency', 'ClaimAmount']
+        # all_targets = ['ClaimAmount']
+        # GLM with Poisson ditribution and log link
+        # reg = TweedieRegressor(power=1, alpha=0.5, link='log')
+        all_algos = [RandomForestClassifier(), RandomForestRegressor(), PoissonRegressor(alpha=1e-4, solver="newton-cholesky"), GammaRegressor(alpha=10.0, solver="newton-cholesky")]
+        # all_algos =[GammaRegressor(alpha=10.0, solver="newton-cholesky")]
         for target, alg in zip(all_targets, all_algos):
+            if 'Gamma' in str(alg):
+                # gamma needs positive values
+                df = df[df["ClaimAmount"]>0]
+                df["ClaimAmount"] = df["ClaimAmount"] / df["ClaimNb"]
             # target = 'ClaimAmount'
             # alg = RandomForestRegressor()
             y = df[target]
             X = df.drop(all_targets, axis=1)
             # Instantiate scaler and fit on features
-            # scaler = StandardScaler()
-            # scaler.fit(X)
-            # X_scaled = scaler.transform(X)
-            # col_names = X.columns
-            # X_scaled = pd.DataFrame(data=X_scaled, columns=col_names)
+            scaler = StandardScaler()
+            scaler.fit(X)
+            X_scaled = scaler.transform(X)
+            col_names = X.columns
+            X_scaled = pd.DataFrame(data=X_scaled, columns=col_names)
             # split into train and test
-            # X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.002)
-            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.002)
-            rfc = alg
-            # svm = SVC(kernel='linear')
+            model = alg
             print("fitting model")
-            mod = rfc.fit(X_train, y_train)
-            # svm.fit(X_train, y_train)
-            feature_importances = pd.Series(rfc.feature_importances_, index=X.columns).sort_values(ascending=False)
-            # shap values TODO store them since it takes forever to compute!
-            if SHAP:
-                print("calculating Shap values")
-                # X_test_backscaled = scaler.inverse_transform(X_test)
-                X100 = shap.utils.sample(X_test, 100)
-                explainer = shap.Explainer(rfc.predict, X100)
-                shap_values = explainer(X_test)
-            # shap_values = explainer.shap_values(X_test)
-            print("prediction in progress")
-            y_pred = rfc.predict(X_test)
-            # svm_pred = svm.predict(X_test)
-            y_test = pd.DataFrame(y_test)
-            y_pred = pd.DataFrame(y_pred, columns=[target])
-            print("create plot actual vs predicted")
-            # model plots and metrics
-            if MODEL_PLOTS:
-                actual_pred_scatter(y_test, y_pred, target, plotpath, alg)
-                feature_importances_plot(feature_importances, plotpath, alg)
-                confusion_matrix_and_class_report(alg, y_test, y_pred, plotpath, feat_sel, target)
-            if SHAP:
-                shap_plots(alg, y_pred, X_test, shap_values, plotpath)
-            # confusion matrix and classification report
-            print("calculate accuracy score")
-            calculate_model_metrics(mod, X_train, y_train, target, X_test, y_test, alg)
+            if 'Gamma' in str(alg):
+                X_train, X_test, y_train, y_test = train_test_split(df, X_scaled, test_size=0.2, random_state=0)
+                model.fit(y_train, X_train["ClaimAmount"], sample_weight=X_train["ClaimNb"])
+                scores = score_estimator(
+                    model,
+                    y_train,
+                    y_test,
+                    X_train,
+                    X_test,
+                    target="ClaimAmount",
+                    weights="ClaimNb",
+                )
+                print("Evaluation of GammaRegressor on target AvgClaimAmount")
+                print(scores)
+                if MODEL_PLOTS:
+                    plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, "ClaimNb", df)
+            if 'Poisson' in str(alg):
+                X_train, X_test, y_train, y_test = train_test_split(df, X_scaled, test_size=0.2, random_state=0)
+                model.fit(y_train, X_train["Frequency"], sample_weight=X_train["Exposure"])
+                scores = score_estimator(
+                    model,
+                    y_train,
+                    y_test,
+                    X_train,
+                    X_test,
+                    target="Frequency",
+                    weights="Exposure",
+                )
+                print("Evaluation of PoissonRegressor on target Frequency")
+                print(scores)
+                plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, "Exposure", df)
+                # actual_pred_scatter_for_feature(model, X_train, y_train, target, plotpath, alg, "DrivAge", "ClaimNb")
+
+                fig, ax = plt.subplots(ncols=2, nrows=2, figsize=(16, 8))
+                fig.subplots_adjust(hspace=0.3, wspace=0.2)
+                # y_pred = model.predict(X_test)
+                plot_obs_pred(
+                    df=X_train,
+                    feature="DrivAge",
+                    weight="Exposure",
+                    observed="Frequency",
+                    predicted=model.predict(y_train),
+                    y_label="Claim Frequency",
+                    title="train data",
+                    ax=ax[0, 0],
+                )
+
+                plot_obs_pred(
+                    df=X_test,
+                    feature="DrivAge",
+                    weight="Exposure",
+                    observed="Frequency",
+                    predicted=model.predict(y_test),
+                    y_label="Claim Frequency",
+                    title="test data",
+                    ax=ax[0, 1],
+                    fill_legend=True,
+                )
+
+                plot_obs_pred(
+                    df=X_test,
+                    feature="VehAge",
+                    weight="Exposure",
+                    observed="Frequency",
+                    predicted=model.predict(y_test),
+                    y_label="Claim Frequency",
+                    title="test data",
+                    ax=ax[1, 0],
+                    fill_legend=True,
+                )
+
+                plot_obs_pred(
+                    df=X_test,
+                    feature="BonusMalus",
+                    weight="Exposure",
+                    observed="Frequency",
+                    predicted=model.predict(y_test),
+                    y_label="Claim Frequency",
+                    title="test data",
+                    ax=ax[1, 1],
+                    fill_legend=True,
+                )
+                if MODEL_PLOTS:
+                    # actual_pred_scatter_for_feature(model, X_train, y_train, target, plotpath, alg, "Exposure", df)
+                    plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, "Exposure", df)
+            else:
+                # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1)
+                X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2)
+                mod = model.fit(X_train, y_train)
+                # svm = SVC(kernel='linear')
+
+                # glm_mod = reg.fit(X_train, y_train)
+                # svm.fit(X_train, y_train)
+                feature_importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
+                # shap values TODO store them since it takes forever to compute!
+                if SHAP:
+                    print("calculating Shap values")
+                    # X_test_backscaled = scaler.inverse_transform(X_test)
+                    X100 = shap.utils.sample(X_test, 100)
+                    explainer = shap.Explainer(model.predict, X100)
+                    shap_values = explainer(X_test)
+                # shap_values = explainer.shap_values(X_test)
+                print("prediction in progress")
+                y_pred = model.predict(X_test)
+                # glm_y_pred = reg.coef_
+                # svm_pred = svm.predict(X_test)
+                y_test = pd.DataFrame(y_test)
+                y_pred = pd.DataFrame(y_pred, columns=[target])
+                print("create plot actual vs predicted")
+                # model plots and metrics
+                if MODEL_PLOTS:
+                    actual_pred_scatter(y_test, y_pred, target, plotpath, alg)
+                    if 'RandomForest' in str(alg):
+                        feature_importances_plot(feature_importances, plotpath, alg)
+                    confusion_matrix_and_class_report(alg, y_test, y_pred, plotpath, feat_sel, target)
+                if SHAP:
+                    shap_plots(alg, y_pred, X_test, shap_values, plotpath)
+                # confusion matrix and classification report
+                if 'RandomForest' in str(alg):
+                    print("calculate accuracy score")
+                    calculate_model_metrics(mod, X_train, y_train, target, X_test, y_test, alg)
+                # mean values:
+                if 'Poisson' in str(alg):
+                    data_mean = df_initial[target].mean()
+                    mean_for_claims_greater_than_one = X_train[target][X_train[target] > 0].mean()
+                    model_mean = model.predict(y_train).mean()
+
             pbar.update(100/nb_of_iterations)
     # update progress bar for iteration through models
     pbar.close()

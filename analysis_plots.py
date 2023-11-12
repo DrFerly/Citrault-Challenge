@@ -40,6 +40,53 @@ def analysis_plots(df, plotpath, string_columns):
                         close=True
                     )
 
+def actual_pred_scatter_for_feature(model, y_test, y_pred, target, outfile, alg, feat, weight):
+    mdl = model
+    # model_plotpath = os.path.join(plotpath, "models")
+    # modelname=str(alg)
+    # if 'Poisson' in str(alg):
+    #     modelname='PoissonRegressor'
+    # scatter_model_filename = modelname + str(target) + '.png'
+    # outfile = os.path.join(model_plotpath, scatter_model_filename)
+    fig = plt.figure(figsize=(25, 25))
+    ax1 = fig.add_subplot(111)
+    y_test_plt = y_test.copy()
+    y_pred_plt = mdl.predict(y_pred)
+    y_pred_plt = pd.DataFrame(y_pred_plt, columns=[target])
+    y_pred_plt[target] = y_pred_plt[target]*y_test[weight]
+    y_test_plt[target] = y_test_plt[target]*y_test[weight]
+    y_pred_plt[feat] = y_test_plt[feat].to_list()
+    y_test_plt = y_test_plt.groupby(feat, as_index=False).mean()
+    y_pred_plt = y_pred_plt.groupby(feat, as_index=False).mean()
+    ax1.plot(y_test_plt[feat], y_test_plt[target], c='b', marker="o", ls='', markersize=15, label='Actual')
+    ax1.plot(y_pred_plt[feat], y_pred_plt[target], c='r', marker="o", ls='', ms=15, label='Predicted')
+    plt.legend(loc="upper right", fontsize=40)
+    ax1.set_ylabel("predicted", fontsize=40)
+    ax1.set_xlabel("actual", fontsize=40)
+    ax1.tick_params(axis='both', which='major', labelsize=40)
+    ax1.tick_params(axis='both', which='minor', labelsize=40)
+    # ax1.margins(50)
+    if outfile:
+        plt.savefig(outfile)
+    plt.close("all")
+
+
+def plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, weight, df):
+    glm_model_plotpath = os.path.join(plotpath, "models/glm")
+    # print train plots
+    for feat in df.columns:
+        modelname = str(alg).split('(')[0] + "_" + feat + "_train_"
+        glm_model_filename = modelname + str(target) + '.png'
+        outfile = os.path.join(glm_model_plotpath, glm_model_filename)
+        actual_pred_scatter_for_feature(model, X_train, y_train, target, outfile, alg, feat, weight)
+    # print predict plots
+    for feat in df.columns:
+        modelname = str(alg).split('(')[0] + "_" + feat + "_predict_"
+        glm_model_filename = modelname + str(target) + '.png'
+        outfile = os.path.join(glm_model_plotpath, glm_model_filename)
+        actual_pred_scatter_for_feature(model, X_test, y_test, target, outfile, alg, feat, weight)
+
+
 
 def actual_pred_scatter(y_test, y_pred, target, plotpath, alg):
     model_plotpath = os.path.join(plotpath, "models")
