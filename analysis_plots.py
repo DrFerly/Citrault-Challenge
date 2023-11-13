@@ -51,15 +51,21 @@ def actual_pred_scatter_for_feature(model, y_test, y_pred, target, outfile, alg,
     fig = plt.figure(figsize=(25, 25))
     ax1 = fig.add_subplot(111)
     y_test_plt = y_test.copy()
-    y_pred_plt = mdl.predict(y_pred)
-    y_pred_plt = pd.DataFrame(y_pred_plt, columns=[target])
-    y_pred_plt[target] = y_pred_plt[target]*y_test[weight]
-    y_test_plt[target] = y_test_plt[target]*y_test[weight]
+    if not pd.isna(weight):
+        y_pred_plt = mdl.predict(y_pred)
+        y_pred_plt = pd.DataFrame(y_pred_plt, columns=[target])
+        y_pred_plt[weight] = y_test[weight].to_list()
+        y_pred_plt[target] = y_pred_plt[target]*y_pred_plt[weight]
+        y_test_plt[target] = y_test_plt[target]*y_test[weight]
+    else:
+        y_pred_plt = mdl.predict(y_test)
+        y_pred_plt = pd.DataFrame(y_pred_plt, columns=[target])
+        y_test_plt[target] = y_pred
     y_pred_plt[feat] = y_test_plt[feat].to_list()
     y_test_plt = y_test_plt.groupby(feat, as_index=False).mean()
     y_pred_plt = y_pred_plt.groupby(feat, as_index=False).mean()
-    ax1.plot(y_test_plt[feat], y_test_plt[target], c='b', marker="o", ls='', markersize=15, label='Actual')
-    ax1.plot(y_pred_plt[feat], y_pred_plt[target], c='r', marker="o", ls='', ms=15, label='Predicted')
+    ax1.plot(y_test_plt[feat], y_test_plt[target], c='b', marker="o", ls='', markersize=12, label='Actual')
+    ax1.plot(y_test_plt[feat], y_pred_plt[target], c='r', marker="o", ls='', ms=12, label='Predicted')
     plt.legend(loc="upper right", fontsize=40)
     ax1.set_ylabel("predicted", fontsize=40)
     ax1.set_xlabel("actual", fontsize=40)
@@ -72,19 +78,25 @@ def actual_pred_scatter_for_feature(model, y_test, y_pred, target, outfile, alg,
 
 
 def plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, weight, df):
-    glm_model_plotpath = os.path.join(plotpath, "models/glm")
+    glm_model_plotpath = os.path.join(plotpath, "models")
+    if any(ele in str(alg) for ele in ['Poisson','Gamma']):
+        glm_model_plotpath = os.path.join(glm_model_plotpath, "glm")
+    elif 'RandomForest' in str(alg):
+        glm_model_plotpath = os.path.join(glm_model_plotpath, "rf")
     # print train plots
-    for feat in df.columns:
-        modelname = str(alg).split('(')[0] + "_" + feat + "_train_"
-        glm_model_filename = modelname + str(target) + '.png'
-        outfile = os.path.join(glm_model_plotpath, glm_model_filename)
-        actual_pred_scatter_for_feature(model, X_train, y_train, target, outfile, alg, feat, weight)
+    for feat in X_train.columns:
+        if target != feat:
+            modelname = str(alg).split('(')[0] + "_" + feat + "_train_"
+            glm_model_filename = modelname + str(target) + '.png'
+            outfile = os.path.join(glm_model_plotpath, glm_model_filename)
+            actual_pred_scatter_for_feature(model, X_train, y_train, target, outfile, alg, feat, weight)
     # print predict plots
-    for feat in df.columns:
-        modelname = str(alg).split('(')[0] + "_" + feat + "_predict_"
-        glm_model_filename = modelname + str(target) + '.png'
-        outfile = os.path.join(glm_model_plotpath, glm_model_filename)
-        actual_pred_scatter_for_feature(model, X_test, y_test, target, outfile, alg, feat, weight)
+    for feat in X_train.columns:
+        if target != feat:
+            modelname = str(alg).split('(')[0] + "_" + feat + "_predict_"
+            glm_model_filename = modelname + str(target) + '.png'
+            outfile = os.path.join(glm_model_plotpath, glm_model_filename)
+            actual_pred_scatter_for_feature(model, X_test, y_test, target, outfile, alg, feat, weight)
 
 
 

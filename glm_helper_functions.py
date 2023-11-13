@@ -26,7 +26,7 @@ def score_estimator(
     """Evaluate an estimator on train and test sets with different metrics"""
 
     metrics = [
-        ("D² explained", None),  # Use default scorer if it exists
+        ("D² Tweedie", None),  # Use default scorer if it exists
         ("mean abs. error", mean_absolute_error),
         ("mean squared error", mean_squared_error),
     ]
