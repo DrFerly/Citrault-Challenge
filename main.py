@@ -1,31 +1,32 @@
 """
-coding challenge for french car insurance
+Axa coding challenge for french third-party motor liability insurance data
+ML for Pure Premium
+Dr. Lynn Ferres, 15.11.2023
 """
 import os
 import time
-import pandas as pd
-from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
-from sklearn.svm import SVC
-from sklearn.linear_model import TweedieRegressor, PoissonRegressor, GammaRegressor
 import winsound
+import pandas as pd
 from tqdm import tqdm
 import shap
+from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
+from sklearn.svm import SVC
+from sklearn.linear_model import PoissonRegressor, GammaRegressor
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
-from analysis_plots import analysis_plots, \
-    actual_pred_scatter, shap_plots, feature_importances_plot, confusion_matrix_and_class_report, calculate_model_metrics, \
-        actual_pred_scatter_for_feature, plot_train_actual_vs_predicted_features
-from GLOBAL_VAR import SHAP, MODEL_PLOTS
 from sklearn.preprocessing import StandardScaler
+import analysis_plots
+from feature_importance import feature_importances_plot, shap_plots
+from global_vars import SHAP, MODEL_PLOTS
 from data_preprocessing import encode_string_columns, join_and_clean_data
-from glm_helper_functions import score_estimator
-import matplotlib.pyplot as plt
-import numpy as np
-
+from actual_vs_pred_plots import actual_pred_feature_plots, actual_pred_scatter
+from model_metrics import calculate_model_metrics, \
+    confusion_matrix_and_class_report, score_estimator
 
 
 def main():
     """"
-    main function to load data
+    main function to load, join and clean the data, train models, make predictions
+    and create all kind of plots necessary for data analysis and model evaluation.
     """
     shap.initjs()
     start_time = time.perf_counter()
@@ -40,16 +41,13 @@ def main():
     string_columns = ['Area', 'VehBrand', 'VehGas', 'Region']
     # clean data and format columns of string type:
     df = join_and_clean_data(df_claims, df_damage, string_columns)
-    # create plots for data analysis
-    analysis_plots(df, plotpath, string_columns)
+    # create plots for data analysis if CREATE_ANALYSIS_PLOTS is True
+    analysis_plots.analysis_plots(df, plotpath, string_columns)
     # drop features that should not be considered in model
-    # df = df.drop(columns=["IDpol", "Area", "Exposure"])
     df = df.drop(columns=["Area"])
-    # set start if progress bar
-    pbar = tqdm(total=100)
-    # try out different features and loop over selection for model training+ pred:
+    # try out different feature sets and loop over selection:
     selected_features_to_drop = [
-        ["IDpol"],
+        ["IDpol", "VehGas", "VehGas", "BonusMalus", "VehBrand", "VehGas", "Region", "PurePremium", "Frequency", "Exposure", "VehPower", "VehAge"],
         # ["IDpol", "VehGas", "Density", "DrivAge"],
         # ["IDpol", "Area", "Region"],
         # ["IDpol", "VehBrand", "Area", "Region"]
@@ -73,22 +71,24 @@ def main():
                 print(str(df[col].isna().sum()) + " NaN's in col " + str(col))
         # define targets and algorithms to try
         all_targets = [
-                       'ClaimNb', 
-                       'ClaimAmount', 
-                       'Frequency', 
-                       'ClaimAmount'
+                       'ClaimNb',
+                       'ClaimAmount',
+                       # 'Frequency',
+                       # 'ClaimAmount'
                        ]
         # all_targets = ['ClaimAmount']
         # GLM with Poisson ditribution and log link
         # reg = TweedieRegressor(power=1, alpha=0.5, link='log')
         all_algos = [
-                     RandomForestClassifier(), 
-                     RandomForestRegressor(), 
-                     PoissonRegressor(alpha=1e-4, solver="newton-cholesky"), 
-                     GammaRegressor(alpha=10.0, solver="newton-cholesky")
+                     RandomForestClassifier(),
+                     RandomForestRegressor(),
+                     # PoissonRegressor(alpha=1e-4, solver="newton-cholesky"),
+                     # GammaRegressor(alpha=10.0, solver="newton-cholesky")
                      ]
         # all_algos =[GammaRegressor(alpha=10.0, solver="newton-cholesky")]
         for target, alg in zip(all_targets, all_algos):
+            # set start of progress bar
+            pbar = tqdm(total=100)
             if 'Gamma' in str(alg):
                 # gamma needs positive values
                 df = df[df["ClaimAmount"]>0]
@@ -97,8 +97,10 @@ def main():
             # alg = RandomForestRegressor()
             y = df[target]
             X = df.drop(all_targets, axis=1)
-            if not 'Poisson' in str(alg):
+            if 'Poisson' not in str(alg):
                 X = X.drop(columns=["PurePremium"])
+                if "Frequency" in X.columns:
+                    X = X.drop(columns=["Frequency"])
             # Instantiate scaler and fit on features
             scaler = StandardScaler()
             scaler.fit(X)
@@ -109,8 +111,15 @@ def main():
             model = alg
             print("fitting model")
             if 'Gamma' in str(alg):
-                X_train, X_test, y_train, y_test = train_test_split(df, X_scaled, test_size=0.2, random_state=0)
-                model.fit(y_train, X_train["ClaimAmount"], sample_weight=X_train["ClaimNb"])
+                X_train, X_test, y_train, y_test = train_test_split(
+                    df,
+                    X_scaled,
+                    test_size=0.2,
+                    random_state=0)
+                model.fit(
+                    y_train, X_train["ClaimAmount"],
+                    sample_weight=X_train["ClaimNb"]
+                    )
                 scores = score_estimator(
                     model,
                     y_train,
@@ -123,9 +132,29 @@ def main():
                 print("Evaluation of GammaRegressor on target AvgClaimAmount")
                 print(scores)
                 if MODEL_PLOTS:
-                    plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, "ClaimNb", df)
+                    actual_pred_feature_plots(
+                        model,
+                        X_train,
+                        y_train,
+                        X_test,
+                        y_test,
+                        target,
+                        plotpath,
+                        "ClaimNb"
+                    )
+                data_mean = df_initial[target].mean()
+                mean_for_claims_greater_than_one = X_train[target][X_train[target] > 0].mean()
+                model_mean = model.predict(y_train).mean()
+                print("Mean ClaimAmount: ",  data_mean)
+                print("Mean ClaimAmount for Claims: ",  mean_for_claims_greater_than_one)
+                print("pedicted mean ClaimAmount for Claims: ",  model_mean)
             elif 'Poisson' in str(alg):
-                X_train, X_test, y_train, y_test = train_test_split(df, X_scaled, test_size=0.2, random_state=0)
+                X_train, X_test, y_train, y_test = train_test_split(
+                    df,
+                    X_scaled,
+                    test_size=0.2,
+                    random_state=0
+                )
                 model.fit(y_train, X_train["Frequency"], sample_weight=X_train["Exposure"])
                 scores = score_estimator(
                     model,
@@ -139,27 +168,46 @@ def main():
                 print("Evaluation of PoissonRegressor on target Frequency")
                 print(scores)
                 if MODEL_PLOTS:
-                    plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, "Exposure", df)
-                # actual_pred_scatter_for_feature(model, X_train, y_train, target, plotpath, alg, "DrivAge", "ClaimNb")
-                data_mean = df_initial[target].mean()
-                mean_for_claims_greater_than_one = X_train[target][X_train[target] > 0].mean()
+                    actual_pred_feature_plots(
+                        model,
+                        X_train,
+                        y_train,
+                        X_test,
+                        y_test,
+                        target,
+                        plotpath,
+                        "Exposure")
+                # actual_pred_scatter_for_feature(
+                #   model,
+                #   X_train,
+                #   y_train,
+                #   target,
+                #   plotpath,
+                #   alg,
+                #   "DrivAge",
+                #   "ClaimNb"
+                # )
+                data_mean = df_initial["ClaimNb"].mean()
+                mean_for_claims_greater_than_one = X_train["ClaimNb"][X_train["ClaimNb"] > 0].mean()
                 model_mean = model.predict(y_train).mean()
-                print("Mean ClaimAmount: ",  data_mean)
-                print("Mean ClaimAmount for Claims: ",  mean_for_claims_greater_than_one)
-                print("pedicted mean ClaimAmount for Claims: ",  model_mean)
+                print("Mean NbClaims: ",  data_mean)
+                print("Mean NbClaims for ClaimAmount>0: ",  mean_for_claims_greater_than_one)
+                print("absoluteNbOfClaims", len(X_train[target][X_train[target] > 0]))
+                print("pedicted mean Frequency: ",  model_mean)
             else:
-                # X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.1)
-                X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2)
+                X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
+                # X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2)
                 mod = model.fit(X_train, y_train)
                 # svm = SVC(kernel='linear')
-
                 # glm_mod = reg.fit(X_train, y_train)
                 # svm.fit(X_train, y_train)
-                feature_importances = pd.Series(model.feature_importances_, index=X.columns).sort_values(ascending=False)
+                feature_importances = pd.Series(model.feature_importances_, \
+                    index=X.columns).sort_values(ascending=False)
                 # shap values TODO store them since it takes forever to compute!
                 if SHAP:
                     print("calculating Shap values")
                     # X_test_backscaled = scaler.inverse_transform(X_test)
+                    # only take 100 otherwise it takes too long
                     X100 = shap.utils.sample(X_test, 100)
                     explainer = shap.Explainer(model.predict, X100)
                     shap_values = explainer(X_test)
@@ -174,17 +222,37 @@ def main():
                 # model plots and metrics
                 if MODEL_PLOTS:
                     actual_pred_scatter(y_test, y_pred, target, plotpath, alg)
-                    if 'RandomForest' in str(alg):
-                        feature_importances_plot(feature_importances, plotpath, alg)
-                    confusion_matrix_and_class_report(alg, y_test, y_pred, plotpath, feat_sel, target)
-                    plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, None, df)
+                    feature_importances_plot(feature_importances, plotpath, alg)
+                    confusion_matrix_and_class_report(
+                        alg,
+                        y_test,
+                        y_pred,
+                        plotpath,
+                        feat_sel,
+                        target
+                    )
+                    actual_pred_feature_plots(
+                        model,
+                        X_train,
+                        y_train,
+                        X_test,
+                        y_test,
+                        target,
+                        plotpath,
+                        None)
                 if SHAP:
                     shap_plots(alg, y_pred, X_test, shap_values, plotpath)
                 # confusion matrix and classification report
                 if 'RandomForest' in str(alg):
                     print("calculate accuracy score")
-                    calculate_model_metrics(mod, X_train, y_train, target, X_test, y_test, alg)
-                # mean values:
+                    calculate_model_metrics(
+                        mod,
+                        X_train,
+                        y_train,
+                        target,
+                        X_test,
+                        y_test
+                        )
         # update progress bar for iteration through models
         pbar.update(100/nb_of_iterations)
     pbar.close()
@@ -194,11 +262,7 @@ def main():
     end_time = time.perf_counter()
     execution_time = end_time - start_time
     print(f"The execution time is: {execution_time/60} minutes")
-
     print('done!')
-
-
-
 
 
 if __name__ == "__main__":

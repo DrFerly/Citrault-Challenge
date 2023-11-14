@@ -1,19 +1,22 @@
 """
-script to produce histogram plots of feature columns
+script to produce data analysis plots such as scatter plots, histograms,
+correlation matrix and boxplots
 """
 import os
 import pandas as pd
 import numpy as np
-import shap
 import matplotlib.pyplot as plt
-from GLOBAL_VAR import CREATE_ANALYSIS_PLOTS, SHAP
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-from sklearn.metrics import accuracy_score, precision_score, recall_score, classification_report
+from global_vars import CREATE_ANALYSIS_PLOTS
 
 
 def analysis_plots(df, plotpath, string_columns):
     """
     create plots for data analysis
+
+    :input df: pd.DataFrame of df containing the data that should be plotted
+    :input plotpath: str of path where the plots will be save
+    :input string_columns: list of str, columns of StringType format
     """
     if CREATE_ANALYSIS_PLOTS:
         print("create boxplots")
@@ -40,93 +43,17 @@ def analysis_plots(df, plotpath, string_columns):
                         close=True
                     )
 
-def actual_pred_scatter_for_feature(model, y_test, y_pred, target, outfile, alg, feat, weight):
-    mdl = model
-    # model_plotpath = os.path.join(plotpath, "models")
-    # modelname=str(alg)
-    # if 'Poisson' in str(alg):
-    #     modelname='PoissonRegressor'
-    # scatter_model_filename = modelname + str(target) + '.png'
-    # outfile = os.path.join(model_plotpath, scatter_model_filename)
-    fig = plt.figure(figsize=(25, 25))
-    ax1 = fig.add_subplot(111)
-    y_test_plt = y_test.copy()
-    if not pd.isna(weight):
-        y_pred_plt = mdl.predict(y_pred)
-        y_pred_plt = pd.DataFrame(y_pred_plt, columns=[target])
-        y_pred_plt[weight] = y_test[weight].to_list()
-        y_pred_plt[target] = y_pred_plt[target]*y_pred_plt[weight]
-        y_test_plt[target] = y_test_plt[target]*y_test[weight]
-    else:
-        y_pred_plt = mdl.predict(y_test)
-        y_pred_plt = pd.DataFrame(y_pred_plt, columns=[target])
-        y_test_plt[target] = y_pred
-    y_pred_plt[feat] = y_test_plt[feat].to_list()
-    y_test_plt = y_test_plt.groupby(feat, as_index=False).mean()
-    y_pred_plt = y_pred_plt.groupby(feat, as_index=False).mean()
-    ax1.plot(y_test_plt[feat], y_test_plt[target], c='b', marker="o", ls='', markersize=12, label='Actual')
-    ax1.plot(y_test_plt[feat], y_pred_plt[target], c='r', marker="o", ls='', ms=12, label='Predicted')
-    plt.legend(loc="upper right", fontsize=40)
-    ax1.set_ylabel("predicted", fontsize=40)
-    ax1.set_xlabel("actual", fontsize=40)
-    ax1.tick_params(axis='both', which='major', labelsize=40)
-    ax1.tick_params(axis='both', which='minor', labelsize=40)
-    # ax1.margins(50)
-    if outfile:
-        plt.savefig(outfile)
-    plt.close("all")
-
-
-def plot_train_actual_vs_predicted_features(model, X_train, y_train, X_test, y_test, target, plotpath, alg, weight, df):
-    glm_model_plotpath = os.path.join(plotpath, "models")
-    if any(ele in str(alg) for ele in ['Poisson','Gamma']):
-        glm_model_plotpath = os.path.join(glm_model_plotpath, "glm")
-    elif 'RandomForest' in str(alg):
-        glm_model_plotpath = os.path.join(glm_model_plotpath, "rf")
-    # print train plots
-    for feat in X_train.columns:
-        if target != feat:
-            modelname = str(alg).split('(')[0] + "_" + feat + "_train_"
-            glm_model_filename = modelname + str(target) + '.png'
-            outfile = os.path.join(glm_model_plotpath, glm_model_filename)
-            actual_pred_scatter_for_feature(model, X_train, y_train, target, outfile, alg, feat, weight)
-    # print predict plots
-    for feat in X_train.columns:
-        if target != feat:
-            modelname = str(alg).split('(')[0] + "_" + feat + "_predict_"
-            glm_model_filename = modelname + str(target) + '.png'
-            outfile = os.path.join(glm_model_plotpath, glm_model_filename)
-            actual_pred_scatter_for_feature(model, X_test, y_test, target, outfile, alg, feat, weight)
-
-
-
-def actual_pred_scatter(y_test, y_pred, target, plotpath, alg):
-    model_plotpath = os.path.join(plotpath, "models")
-    modelname=str(alg)
-    scatter_model_filename = modelname + str(target) + '.png'
-    outfile = os.path.join(model_plotpath, scatter_model_filename)
-    fig = plt.figure(figsize=(25, 25))
-    ax1 = fig.add_subplot(111)
-    ax1.scatter(y_test[target], y_pred[target], s=20, c='b', marker="o", label='RFRegressor')
-    # ax1.scatter(x_id, y_pred[target], s=10, c='r', marker="o", label='Predicted')
-    plt.legend(loc="upper right", fontsize=40)
-    ax1.set_ylabel("predicted", fontsize=40)
-    ax1.set_xlabel("actual", fontsize=40)
-    ax1.tick_params(axis='both', which='major', labelsize=40)
-    ax1.tick_params(axis='both', which='minor', labelsize=40)
-    ax1.axline((0, 0), slope=0.5, c='black')
-    ax1.set_xlim(0, 5000)
-    ax1.set_ylim(0, 5000)
-    # ax1.margins(50)
-    if outfile:
-        plt.savefig(outfile)
-    plt.close("all")
-
-
 
 def scatter(x, y, xlabel=None, ylabel=None, outfile=None, close=True):
     """
     function to create a scatterplot using the scatter function
+
+    :input x: pd series, data for x-axis
+    :input y: pd series, data for y-axis
+    :input xlabel: str, text for x-axis
+    :input ylabel: str, text for y-axis
+    :input outfile: str, path to save .png file
+    :input close: bool, wheter to close the show-plot window
     """
     plt.figure(figsize=(20, 20))
     plt.plot(x, y, marker="o", linewidth = 0, markersize=10)
@@ -144,6 +71,13 @@ def scatter(x, y, xlabel=None, ylabel=None, outfile=None, close=True):
 
 
 def confusion_matrix_plot(y_test, y_pred, outpath, feat_sel):
+    """
+    creates a confusion matrix with a color bar
+    :input y_test: pd.DataFrame of y_test data
+    :input y_pred: pd.DataFrame of y_pred data
+    :input outpath: str path to save the heatmap .png file
+    :input feat_sel: list of str of selected features
+    """
     cm = confusion_matrix(y_test, y_pred)
     ConfusionMatrixDisplay(confusion_matrix=cm).plot()
     cmpath = os.path.join(outpath, "confusion_matrix")
@@ -264,10 +198,8 @@ def boxplot(df, plotpath, string_columns):
     """"
     creates a boxplot each column
 
-    :param df: input dataframe with the ingredients as columns
-    :type df: pd.DataFrame
-    :param countsplotpath: output path for plots
-    :type countsplotpath: string
+    :input df: pd.DataFrame with the ingredients as columns
+    :output countsplotpath: str path for plots
     """
     # use the renaming dictionary in order to get rid of the special characters#
     counts_renaming = {}
@@ -320,15 +252,6 @@ def counts(df, countsplotpath):
     :param countsplotpath: output path for plots
     :type countsplotpath: string
     """
-    # use the renaming dictionary in order to get rid of the special characters#
-    # counts_renaming = {}
-    # for col in df.columns:
-    #     special_chars = ['\n', '.', ',', ':', '/', '\'']
-    #     for spec_char in special_chars:
-    #         col_cleaned = col.replace(spec_char, '')
-    #         counts_renaming.update({col : col_cleaned})
-    # df = df.rename(columns=counts_renaming)
-    # df.replace(0, np.nan, inplace=True)
     countsplotpath = os.path.join(countsplotpath, "histogram")
     # for each columns do the counts:
     for prop in list(df.columns.drop("IDpol")):
@@ -369,101 +292,4 @@ def counts(df, countsplotpath):
         plt.savefig(os.path.join(countsplotpath, outname))
         plt.close("all")
 
-
-def shap_plots(alg, y_pred, X_test, shap_values, plotpath):
-    model_plotpath = os.path.join(plotpath, "shap")
-    shap_file_name="shap"
-    if 'Class' in str(alg):
-        for n_claims_case in [0, 1]:
-            plt.figure(figsize=(30, 30))
-            example = np.where(y_pred == n_claims_case)[0][0]
-            shap.plots.waterfall(shap_values[example], max_display=20, show=False)
-            fig = plt.gcf()
-            shapvalues_model_filename = str(alg) + shap_file_name + "_example_ypred_is" + str(n_claims_case) + '.png'
-            shapfile = os.path.join(model_plotpath, shapvalues_model_filename)
-            plt.savefig(shapfile)
-            plt.close("all")
-    plt.figure(figsize=(30, 30))
-    shap.summary_plot(shap_values, X_test, show=False)
-    fig = plt.gcf()
-    shapsum_model_filename = str(alg) + shap_file_name + "summaryplot.png"
-    shapfile = os.path.join(model_plotpath, shapsum_model_filename)
-    plt.savefig(shapfile)
-    plt.close("all")
-    plt.figure(figsize=(30, 30))
-    shap.plots.beeswarm(shap_values, show=False)
-    fig = plt.gcf()
-    shapbee_model_filename = str(alg) + shap_file_name + "beeswarmplot.png"
-    shapfile = os.path.join(model_plotpath, shapbee_model_filename)
-    plt.savefig(shapfile)
-    plt.close("all")
-    plt.figure(figsize=(30, 30))
-    shap.plots.beeswarm(shap_values.abs, color="shap_red", show=False)
-    fig = plt.gcf()
-    shapredbee_model_filename = str(alg) + shap_file_name + "red_beeswarmplot.png"
-    shapfile = os.path.join(model_plotpath, shapredbee_model_filename)
-    plt.savefig(shapfile)
-    plt.close("all")
-    plt.figure(figsize=(30, 30))
-    shap.plots.bar(shap_values, show=False)
-    fig = plt.gcf()
-    shapbar_model_filename = str(alg) + shap_file_name + "barplot.png"
-    shapfile = os.path.join(model_plotpath, shapbar_model_filename)
-    plt.savefig(shapfile)
-    plt.close("all")
-    plt.figure(figsize=(30, 30))
-    shap.plots.bar(shap_values.abs.max(0), show=False)
-    fig = plt.gcf()
-    shapbarabs_model_filename = str(alg) + shap_file_name + "barplot_abs_max.png"
-    shapabsfile = os.path.join(model_plotpath, shapbarabs_model_filename)
-    plt.savefig(shapabsfile)
-    plt.close("all")
-    plt.figure(figsize=(30, 30))
-    fig = plt.gcf()
-    # shap.plots.scatter(shap_values[:, "DrivAge"], color=shap_values[:, "VehAge"], show=False)
-    # will do
-    for col in X_test.columns:
-        plt.figure(figsize=(30, 30))
-        shap.plots.scatter(shap_values[:, col], show=False)
-        fig = plt.gcf()
-        shapbarabs_model_filename = str(alg) + col + ".png"
-        shapabsfile = os.path.join(model_plotpath, shapbarabs_model_filename)
-        plt.savefig(shapabsfile)
-        plt.close("all")
-        # shap.plots.scatter(shap_values[:, "Density"])
-
-
-def feature_importances_plot(feature_importances, plotpath, alg):
-    plt.figure(figsize=(30, 30))
-    feature_importances.plot.bar()
-    ax = plt.gca()
-    ax.tick_params(axis='both', which='major', labelsize=40)
-    model_plotpath = os.path.join(plotpath, "models")
-    feat_file_name="Feature_importances"
-    features_model_filename = str(alg) + feat_file_name + '.png'
-    featfile = os.path.join(model_plotpath, features_model_filename)
-    plt.savefig(featfile)
-    plt.close("all")
-
-
-def confusion_matrix_and_class_report(alg, y_test, y_pred, plotpath, feat_sel, target):
-    if 'Class' in str(alg):
-        confusion_matrix_plot(y_test, y_pred, plotpath, str(feat_sel))
-        accuracy = accuracy_score(y_test, y_pred)
-        print("The Accuracy for predicting " + target + " is: ", accuracy)
-        model_preds = {
-        # "Logistic Regression": log_reg_preds,
-        # "Support Vector Machine": svm_pred,
-        "Random Forest Classifier": y_pred
-        }
-        for model, preds in model_preds.items():
-            print(f"{model} Results:\n{classification_report(y_test, preds)}", sep="\n\n")
-
-
-def calculate_model_metrics(mod, X_train, y_train, target, X_test, y_test, alg):
-    train_scores = mod.score(X_train, y_train, sample_weight=None)
-    print("The Accuracy for training " + target + " by using " + str(alg) + " is: ", train_scores)
-    test_scores = mod.score(X_test, y_test, sample_weight=None)
-    print("The Accuracy for predicting " + target + " by using " + str(alg) + " is: ", test_scores)
-    # precision = precision_score(y_test, y_pred)
-    # recall = recall_score(y_test, y_pred)
+    
