@@ -41,7 +41,7 @@ def join_and_clean_data(df_claims, df_damage, string_columns):
     df = df[df["ClaimAmount"]<=250000]
     # df["Total_ClaimAmount"] = df["ClaimNb"] * df["ClaimAmount"]
     # for PoissonRegression define new columns:
-    df["PurePremium"] = df["ClaimAmount"] / df["Exposure"]
+    # df["PurePremium"] = df["ClaimAmount"] / df["Exposure"]
     df["Frequency"] = df["ClaimNb"] / df["Exposure"]
     return df
 

@@ -47,9 +47,9 @@ def main():
     df = df.drop(columns=["Area"])
     # try out different feature sets and loop over selection:
     selected_features_to_drop = [
-        ["IDpol", "VehGas", "VehGas", "BonusMalus", "VehBrand", "VehGas", "Region", "PurePremium", "Frequency", "Exposure", "VehPower", "VehAge"],
+        ["IDpol", "VehGas", "VehBrand", "BonusMalus", "Frequency", "Exposure", "VehPower", "VehAge"],
         # ["IDpol", "VehGas", "Density", "DrivAge"],
-        # ["IDpol", "Area", "Region"],
+        # ["IDpol"],
         # ["IDpol", "VehBrand", "Area", "Region"]
     ]
     nb_of_iterations = len(selected_features_to_drop)
@@ -80,27 +80,23 @@ def main():
         # GLM with Poisson ditribution and log link
         # reg = TweedieRegressor(power=1, alpha=0.5, link='log')
         all_algos = [
-                     RandomForestClassifier(),
+                     RandomForestClassifier(n_estimators=2500),
                      RandomForestRegressor(),
                      # PoissonRegressor(alpha=1e-4, solver="newton-cholesky"),
                      # GammaRegressor(alpha=10.0, solver="newton-cholesky")
                      ]
         # all_algos =[GammaRegressor(alpha=10.0, solver="newton-cholesky")]
+        # set start of progress bar
+        pbar = tqdm(total=100)
         for target, alg in zip(all_targets, all_algos):
-            # set start of progress bar
-            pbar = tqdm(total=100)
             if 'Gamma' in str(alg):
                 # gamma needs positive values
                 df = df[df["ClaimAmount"]>0]
                 df["ClaimAmount"] = df["ClaimAmount"] / df["ClaimNb"]
-            # target = 'ClaimAmount'
-            # alg = RandomForestRegressor()
             y = df[target]
             X = df.drop(all_targets, axis=1)
-            if 'Poisson' not in str(alg):
-                X = X.drop(columns=["PurePremium"])
-                if "Frequency" in X.columns:
-                    X = X.drop(columns=["Frequency"])
+            if 'Poisson' not in str(alg) and "Frequency" in X.columns:
+                X = X.drop(columns=["Frequency"])
             # Instantiate scaler and fit on features
             scaler = StandardScaler()
             scaler.fit(X)
@@ -143,10 +139,10 @@ def main():
                         "ClaimNb"
                     )
                 data_mean = df_initial[target].mean()
-                mean_for_claims_greater_than_one = X_train[target][X_train[target] > 0].mean()
+                mean_claims_greater_one = X_train[target][X_train[target] > 0].mean()
                 model_mean = model.predict(y_train).mean()
                 print("Mean ClaimAmount: ",  data_mean)
-                print("Mean ClaimAmount for Claims: ",  mean_for_claims_greater_than_one)
+                print("Mean ClaimAmount for Claims: ",  mean_claims_greater_one)
                 print("pedicted mean ClaimAmount for Claims: ",  model_mean)
             elif 'Poisson' in str(alg):
                 X_train, X_test, y_train, y_test = train_test_split(
@@ -176,17 +172,8 @@ def main():
                         y_test,
                         target,
                         plotpath,
-                        "Exposure")
-                # actual_pred_scatter_for_feature(
-                #   model,
-                #   X_train,
-                #   y_train,
-                #   target,
-                #   plotpath,
-                #   alg,
-                #   "DrivAge",
-                #   "ClaimNb"
-                # )
+                        "Exposure"
+                    )
                 data_mean = df_initial["ClaimNb"].mean()
                 mean_for_claims_greater_than_one = X_train["ClaimNb"][X_train["ClaimNb"] > 0].mean()
                 model_mean = model.predict(y_train).mean()
@@ -195,6 +182,7 @@ def main():
                 print("absoluteNbOfClaims", len(X_train[target][X_train[target] > 0]))
                 print("pedicted mean Frequency: ",  model_mean)
             else:
+                # if RandomForest:
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
                 # X_train, X_test, y_train, y_test = train_test_split(X_scaled, y, test_size=0.2)
                 mod = model.fit(X_train, y_train)
@@ -223,39 +211,39 @@ def main():
                 if MODEL_PLOTS:
                     actual_pred_scatter(y_test, y_pred, target, plotpath, alg)
                     feature_importances_plot(feature_importances, plotpath, alg)
-                    confusion_matrix_and_class_report(
-                        alg,
-                        y_test,
-                        y_pred,
-                        plotpath,
-                        feat_sel,
-                        target
-                    )
-                    actual_pred_feature_plots(
-                        model,
-                        X_train,
-                        y_train,
-                        X_test,
-                        y_test,
-                        target,
-                        plotpath,
-                        None)
+                actual_pred_feature_plots(
+                    model,
+                    X_train,
+                    y_train,
+                    X_test,
+                    y_test,
+                    target,
+                    plotpath,
+                    None
+                )
+                confusion_matrix_and_class_report(
+                    alg,
+                    y_test,
+                    y_pred,
+                    plotpath,
+                    feat_sel,
+                    target
+                )
                 if SHAP:
                     shap_plots(alg, y_pred, X_test, shap_values, plotpath)
                 # confusion matrix and classification report
-                if 'RandomForest' in str(alg):
-                    print("calculate accuracy score")
-                    calculate_model_metrics(
-                        mod,
-                        X_train,
-                        y_train,
-                        target,
-                        X_test,
-                        y_test
-                        )
-        # update progress bar for iteration through models
-        pbar.update(100/nb_of_iterations)
-    pbar.close()
+                print("calculate accuracy score")
+                calculate_model_metrics(
+                    mod,
+                    X_train,
+                    y_train,
+                    target,
+                    X_test,
+                    y_test
+                    )
+            # update progress bar for iteration through models
+            pbar.update(100/nb_of_iterations)
+        pbar.close()
     # tell me when it's done:
     winsound.Beep(frequency=440, duration=1000)
     # get and display runtime
