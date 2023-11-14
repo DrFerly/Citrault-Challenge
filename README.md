@@ -1,7 +1,7 @@
-##################################### Coding Challenge #############################################
-using fremtplfreq and fremtplsev datasets
-author: Lynn Ferres
-date 15.11.2023
+## Coding Challenge
+*using fremtplfreq and fremtplsev datasets
+*author: Lynn Ferres
+*date 15.11.2023
 
 
 If you desire creating plots, set the global variables in GLOBAL_VAR.py to True.

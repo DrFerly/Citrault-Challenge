@@ -47,9 +47,9 @@ def main():
     df = df.drop(columns=["Area"])
     # try out different feature sets and loop over selection:
     selected_features_to_drop = [
-        ["IDpol", "VehGas", "VehBrand", "BonusMalus", "Frequency", "Exposure", "VehPower", "VehAge"],
+        # ["IDpol", "VehGas", "VehBrand", "BonusMalus", "Frequency", "Exposure", "VehPower", "VehAge"],
         # ["IDpol", "VehGas", "Density", "DrivAge"],
-        # ["IDpol"],
+        ["IDpol"],
         # ["IDpol", "VehBrand", "Area", "Region"]
     ]
     nb_of_iterations = len(selected_features_to_drop)
@@ -80,12 +80,11 @@ def main():
         # GLM with Poisson ditribution and log link
         # reg = TweedieRegressor(power=1, alpha=0.5, link='log')
         all_algos = [
-                     RandomForestClassifier(n_estimators=2500),
+                     RandomForestClassifier(),
                      RandomForestRegressor(),
                      # PoissonRegressor(alpha=1e-4, solver="newton-cholesky"),
                      # GammaRegressor(alpha=10.0, solver="newton-cholesky")
                      ]
-        # all_algos =[GammaRegressor(alpha=10.0, solver="newton-cholesky")]
         # set start of progress bar
         pbar = tqdm(total=100)
         for target, alg in zip(all_targets, all_algos):
@@ -249,7 +248,7 @@ def main():
     # get and display runtime
     end_time = time.perf_counter()
     execution_time = end_time - start_time
-    print(f"The execution time is: {execution_time/60} minutes")
+    print(f"\n The execution time is: {execution_time/60} minutes")
     print('done!')
 
 
